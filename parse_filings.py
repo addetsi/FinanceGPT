@@ -35,8 +35,7 @@ def extract_html_from_submission(filepath):
     with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
         content = f.read()
     
-    # full-submission.txt contains multiple documents separated by <DOCUMENT> tags
-    # We want the primary 10-K document (TYPE 10-K)
+    
     doc_pattern = re.compile(
         r'<DOCUMENT>(.*?)</DOCUMENT>', 
         re.DOTALL | re.IGNORECASE
@@ -52,7 +51,7 @@ def extract_html_from_submission(filepath):
             if text_match:
                 return text_match.group(1)
     
-    # Fallback: return full content if no document tags found
+    #return full content if no document tags found
     return content
 
 def parse_filing(filepath):
