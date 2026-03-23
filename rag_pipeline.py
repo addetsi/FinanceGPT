@@ -5,6 +5,7 @@ from sentence_transformers import SentenceTransformer
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
 import os
+from hybrid_retrieval import smart_retrieve
 
 load_dotenv()
 
@@ -187,17 +188,14 @@ def format_graph_context(graph_results):
             f"{r['ticker']}:\n"
             f"  Risks: {', '.join(r['risks'][:3]) or 'none'}\n"
             f"  Geographies: {', '.join(r['geographies'][:3]) or 'none'}\n"
-            f"  Metrics: {', '.join(r['metrics'][:3]) or 'none'}"
+            f"  Metrics: {', '.join(r.get('metrics', [])[:3]) or 'none'}"
         )
     return "\n\n".join(lines)
-
-# Main query function 
 
 def query_financegpt(question, verbose=False):
     print(f"\nQuery: {question}")
     print("-" * 60)
 
-    #  extract tickers and keywords
     tickers = extract_tickers_from_query(question)
     keywords = extract_keywords_from_query(question)
 
@@ -205,15 +203,15 @@ def query_financegpt(question, verbose=False):
         print(f"Detected tickers  : {tickers}")
         print(f"Detected keywords : {keywords}")
 
-    #  vector search
-    ticker_filter = tickers[0] if len(tickers) == 1 else None
-    vector_chunks = vector_search(question, n_results=5, ticker_filter=ticker_filter)
+    # Use smart hybrid retrieval
+    vector_chunks, graph_results, strategy = smart_retrieve(question, tickers, keywords)
 
-    # graph search
-    search_tickers = tickers if tickers else ["AAPL", "MSFT", "TSLA"]  # fallback
-    graph_results = graph_search(search_tickers, keywords)
+    if verbose:
+        print(f"Retrieval strategy: {strategy}")
+        print(f"Vector chunks     : {len(vector_chunks)}")
+        print(f"Graph results     : {len(graph_results)}")
+        print("\nGenerating answer...")
 
-    #  format and send to LLM
     vector_context = format_vector_context(vector_chunks)
     graph_context = format_graph_context(graph_results)
 
@@ -223,15 +221,9 @@ def query_financegpt(question, verbose=False):
         question=question
     )
 
-    if verbose:
-        print(f"Vector chunks     : {len(vector_chunks)}")
-        print(f"Graph results     : {len(graph_results)}")
-        print("\nGenerating answer...")
-
     answer = llm.invoke(final_prompt)
-
     print(f"\nAnswer:\n{answer}")
-    return answer
+    return answer, vector_chunks, graph_results
 
 # Test queries 
 
