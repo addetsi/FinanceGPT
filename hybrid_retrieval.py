@@ -9,8 +9,10 @@ load_dotenv()
 embedder = SentenceTransformer("all-MiniLM-L6-v2")
 chroma_client = PersistentClient(path="data/chromadb")
 collection = chroma_client.get_collection("sec_filings")
+
+NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 neo4j_driver = GraphDatabase.driver(
-    "bolt://localhost:7687",
+    NEO4J_URI,
     auth=("neo4j", os.getenv("NEO4J_PASSWORD", "password"))
 )
 
@@ -151,14 +153,14 @@ def smart_retrieve(query, tickers, keywords):
         strategy = "single-company"
 
     elif len(tickers) > 1:
-        # Multi company comparison
+        #multi company comparison
         chunks = broad_vector_search(query, n_results=6)
         chunks = [c for c in chunks if c["ticker"] in tickers]
         graph_results = multi_company_graph_search(tickers, keywords)
         strategy = "multi-company"
 
     elif sector:
-        # Sector-wide query
+        #sector-wide query
         chunks = broad_vector_search(query, n_results=8)
         sector_tickers = get_tickers_by_sector(sector)
         chunks = [c for c in chunks if c["ticker"] in sector_tickers]
@@ -166,7 +168,7 @@ def smart_retrieve(query, tickers, keywords):
         strategy = f"sector-{sector}"
 
     else:
-        # General broad query
+        #general broad query
         chunks = broad_vector_search(query, n_results=8)
         sample_tickers = list(set(c["ticker"] for c in chunks))[:5]
         graph_results = multi_company_graph_search(sample_tickers, keywords)

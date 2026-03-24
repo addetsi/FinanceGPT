@@ -1,0 +1,14 @@
+venv/
+__pycache__/
+*.pyc
+.env
+data/sec_filings/
+data/chat_history.db
+.git/
+*.md
+test_*.py
+download_filings.py
+parse_filings.py
+extract_entities.py
+populate_graph.py
+build_vectordb.py

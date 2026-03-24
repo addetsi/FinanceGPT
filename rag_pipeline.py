@@ -9,26 +9,38 @@ from hybrid_retrieval import smart_retrieve
 
 load_dotenv()
 
-# Initialise components 
+#initialise components 
 
-llm = OllamaLLM(model="llama3.2", temperature=0.1)
+OLLAMA_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+llm = OllamaLLM(model="llama3.2", temperature=0.1, base_url=OLLAMA_URL)
 
 chroma_client = PersistentClient(path="data/chromadb")
 collection = chroma_client.get_collection("sec_filings")
 
 embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
+NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 neo4j_driver = GraphDatabase.driver(
-    "bolt://localhost:7687",
+    NEO4J_URI,
     auth=("neo4j", os.getenv("NEO4J_PASSWORD", "password"))
 )
 
-# Prompt template 
+#prompt template 
 
 PROMPT_TEMPLATE = """You are a financial analyst assistant specializing in SEC filings analysis.
 Answer the question using ONLY the context provided below.
+Always refer to companies by their full name, not just their ticker symbol.
 Always cite which company and filing section your answer comes from.
 If the context does not contain enough information, say so clearly.
+
+TICKER TO NAME REFERENCE:
+AAPL=Apple, MSFT=Microsoft, GOOGL=Google/Alphabet, TSLA=Tesla, NVDA=NVIDIA,
+META=Meta/Facebook, ORCL=Oracle, CRM=Salesforce, INTC=Intel, AMD=AMD,
+JPM=JPMorgan Chase, BAC=Bank of America, WFC=Wells Fargo, GS=Goldman Sachs,
+MS=Morgan Stanley, C=Citigroup, BLK=BlackRock, AXP=American Express,
+JNJ=Johnson & Johnson, PFE=Pfizer, UNH=UnitedHealth, CVS=CVS Health,
+ABBV=AbbVie, MRK=Merck, XOM=ExxonMobil, CVX=Chevron, COP=ConocoPhillips,
+WMT=Walmart, AMZN=Amazon, HD=Home Depot, TGT=Target, COST=Costco
 
 CONTEXT FROM SEC FILINGS:
 {vector_context}
@@ -38,14 +50,13 @@ KNOWLEDGE GRAPH RELATIONSHIPS:
 
 QUESTION: {question}
 
-ANSWER (be specific, cite sources, use bullet points for multiple findings):"""
-
+ANSWER (use company names not tickers, be specific, use bullet points. Do NOT include source citations inline — sources are shown separately):"""
 prompt = PromptTemplate(
     input_variables=["vector_context", "graph_context", "question"],
     template=PROMPT_TEMPLATE
 )
 
-# Vector retrieval 
+#vector retrieval 
 
 def vector_search(query, n_results=5, ticker_filter=None):
     query_embedding = embedder.encode(query).tolist()
@@ -75,7 +86,7 @@ def vector_search(query, n_results=5, ticker_filter=None):
 
     return chunks
 
-# Graph retrieval
+#graph retrieval
 
 def graph_search(tickers, topic_keywords):
     results = []
@@ -83,7 +94,7 @@ def graph_search(tickers, topic_keywords):
     with neo4j_driver.session() as session:
         for ticker in tickers:
 
-            # Get risks for this company
+            #get risks for this company
             risk_result = session.run("""
                 MATCH (c:Company {ticker: $ticker})-[:REPORTS_RISK]->(r:Risk)
                 WHERE ANY(kw IN $keywords WHERE toLower(r.description) CONTAINS kw)
@@ -93,7 +104,7 @@ def graph_search(tickers, topic_keywords):
 
             risks = [f"{r['category']}: {r['risk']}" for r in risk_result]
 
-            # Get geographies
+            #get geographies
             geo_result = session.run("""
                 MATCH (c:Company {ticker: $ticker})-[:OPERATES_IN]->(g:Geography)
                 RETURN g.name AS geo
@@ -102,7 +113,7 @@ def graph_search(tickers, topic_keywords):
 
             geos = [r["geo"] for r in geo_result]
 
-            # Get metrics
+            #get metrics
             metric_result = session.run("""
                 MATCH (c:Company {ticker: $ticker})-[:HAS_METRIC]->(m:Metric)
                 RETURN DISTINCT m.metric_name AS metric
@@ -121,7 +132,7 @@ def graph_search(tickers, topic_keywords):
 
     return results
 
-# Entity extraction from query
+#entity extraction from query
 
 KNOWN_TICKERS = {
     "AAPL","MSFT","GOOGL","TSLA","NVDA","META","ORCL","CRM","INTC","AMD",
@@ -132,26 +143,92 @@ KNOWN_TICKERS = {
 }
 
 COMPANY_NAME_MAP = {
-    "apple": "AAPL", "microsoft": "MSFT", "google": "GOOGL", "alphabet": "GOOGL",
-    "tesla": "TSLA", "nvidia": "NVDA", "meta": "META", "facebook": "META",
-    "oracle": "ORCL", "salesforce": "CRM", "intel": "INTC",
-    "jpmorgan": "JPM", "jp morgan": "JPM", "bank of america": "BAC",
-    "wells fargo": "WFC", "goldman": "GS", "morgan stanley": "MS",
-    "johnson": "JNJ", "pfizer": "PFE", "exxon": "XOM", "chevron": "CVX",
-    "walmart": "WMT", "amazon": "AMZN", "home depot": "HD", "target": "TGT"
+    #technology
+    "apple": "AAPL",
+    "microsoft": "MSFT",
+    "google": "GOOGL",
+    "alphabet": "GOOGL",
+    "tesla": "TSLA",
+    "nvidia": "NVDA",
+    "meta": "META",
+    "facebook": "META",
+    "oracle": "ORCL",
+    "salesforce": "CRM",
+    "intel": "INTC",
+    "amd": "AMD",
+    "advanced micro": "AMD",
+
+    #finance
+    "jpmorgan": "JPM",
+    "jp morgan": "JPM",
+    "chase": "JPM",
+    "bank of america": "BAC",
+    "wells fargo": "WFC",
+    "goldman sachs": "GS",
+    "goldman": "GS",
+    "morgan stanley": "MS",
+    "citigroup": "C",
+    "citi": "C",
+    "blackrock": "BLK",
+    "american express": "AXP",
+    "amex": "AXP",
+    "us bancorp": "USB",
+    "pnc": "PNC",
+
+    #healthcare
+    "johnson & johnson": "JNJ",
+    "johnson and johnson": "JNJ",
+    "pfizer": "PFE",
+    "unitedhealth": "UNH",
+    "united health": "UNH",
+    "cvs": "CVS",
+    "abbvie": "ABBV",
+    "merck": "MRK",
+    "thermo fisher": "TMO",
+    "abbott": "ABT",
+    "danaher": "DHR",
+    "bristol myers": "BMY",
+    "bristol-myers": "BMY",
+
+    #energy
+    "exxon": "XOM",
+    "exxonmobil": "XOM",
+    "chevron": "CVX",
+    "conocophillips": "COP",
+    "conoco": "COP",
+    "schlumberger": "SLB",
+    "eog resources": "EOG",
+    "pioneer": "PXD",
+    "marathon": "MPC",
+    "phillips 66": "PSX",
+    "valero": "VLO",
+    "occidental": "OXY",
+
+    #retail
+    "walmart": "WMT",
+    "amazon": "AMZN",
+    "home depot": "HD",
+    "target": "TGT",
+    "costco": "COST",
+    "lowe": "LOW",
+    "lowes": "LOW",
+    "ebay": "EBAY",
+    "etsy": "ETSY",
+    "kroger": "KR",
+    "dollar general": "DG",
 }
 
 def extract_tickers_from_query(query):
     query_lower = query.lower()
     found = set()
 
-    # Match ticker symbols directly
+    #match ticker symbols directly
     for word in query.upper().split():
         clean = word.strip("?.,!")
         if clean in KNOWN_TICKERS:
             found.add(clean)
 
-    # Match company names
+    #match company names
     for name, ticker in COMPANY_NAME_MAP.items():
         if name in query_lower:
             found.add(ticker)
@@ -166,7 +243,7 @@ def extract_keywords_from_query(query):
     words = query.lower().split()
     return [w.strip("?.,!") for w in words if w not in stop_words and len(w) > 3]
 
-# Format context for LLM 
+#format context for LLM 
 
 def format_vector_context(chunks):
     if not chunks:
@@ -203,7 +280,7 @@ def query_financegpt(question, verbose=False):
         print(f"Detected tickers  : {tickers}")
         print(f"Detected keywords : {keywords}")
 
-    # Use smart hybrid retrieval
+    #use smart hybrid retrieval
     vector_chunks, graph_results, strategy = smart_retrieve(question, tickers, keywords)
 
     if verbose:
@@ -225,7 +302,7 @@ def query_financegpt(question, verbose=False):
     print(f"\nAnswer:\n{answer}")
     return answer, vector_chunks, graph_results
 
-# Test queries 
+#test queries 
 
 if __name__ == "__main__":
     test_questions = [
