@@ -6,7 +6,7 @@
 
 ## Demo
 
-![FinanceGPT Chat Interface](assets/screenshots/chat_ui.jpg)
+![FinanceGPT Chat Interface](assets/screenshots/chat_ui.jpeg)
 
 ---
 
@@ -30,16 +30,16 @@ FinanceGPT lets you ask complex financial questions and get answers grounded in 
 ## Screenshots
 
 ### Chat Interface with Past Conversations
-![Chat UI](assets/screenshots/chat_ui.jpg)
+![Chat UI](assets/screenshots/chat_ui.jpeg)
 
 ### Multi-Company Comparison
-![Multi Company Comparison](assets/screenshots/multi_company.jpg)
+![Multi Company Comparison](assets/screenshots/multi_company.jpeg)
 
 ### Knowledge Graph Visualization
-![Knowledge Graph](assets/screenshots/graph_viz.jpg)
+![Knowledge Graph](assets/screenshots/graph_viz.jpeg)
 
 ### Neo4j Browser — Apple Risk Network
-![Neo4j Browser](assets/screenshots/neo4j_browser.jpg)
+![Neo4j Browser](assets/screenshots/neo4j_browser.jpeg)
 
 ---
 
